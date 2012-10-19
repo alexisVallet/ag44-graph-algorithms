@@ -12,19 +12,20 @@ import Data.Graph (
   Edge(..), 
   Table(..), 
   Bounds(..))
-import Prelude as Prelude
+import Data.IntMap as IntMap hiding ((!))
+import Prelude as Prelude hiding ((.))
+import Control.Category
 import System.IO as IO
 import Data.ByteString as ByteString
 import Data.Array as Array hiding (index)
 import Data.Char (ord)
 import Data.Word
 import Control.Monad.ST
-import Control.Monad.Trans.RWS.Strict
-import Control.Monad.Trans.Class
-import Data.Vector.Mutable as Vector
-import Data.Lenses.Template as Lenses
+import Control.Monad.RWS.Strict
+import Control.Lens
 import Control.Monad.Primitive
 import Control.Monad
+import Control.Applicative
 import Data.Maybe
 
 fromFile :: FilePath -> IO Graph
@@ -57,49 +58,90 @@ lineToAdjList line =
   (0,[])
   line
 
-data SCCVertexData = SCCVertexData {
-  vertIndex_ :: Int,
-  vertLowLink_ :: Int
+data VertexData = VertexData {
+  _index :: Int,
+  _lowLink :: Int,
+  _isInStack :: Bool
   }
-$(deriveLenses ''SCCVertexData)
+makeLenses ''VertexData
 
-data SCCState s = SCCState {
-  globalIndex_ :: Int,
-  verticesData_ :: MVector (PrimState (ST s)) (Maybe SCCVertexData),
-  visitedStack_ :: [Vertex]
+data SCCState = SCCState {
+  _globalIndex :: Int,
+  _verticesData :: IntMap VertexData,
+  _visitedStack :: [Vertex]
   }
-$(deriveLenses ''SCCState)
+makeLenses ''SCCState
 
-type SCC s = RWST Graph [[Vertex]] (SCCState s) (ST s)
 
-runSCC :: Graph -> (forall s. SCC s a) -> [[Vertex]]
-runSCC graph sccAction = runST $ do
+type SCC = RWS Graph [[Vertex]] SCCState
+
+runSCC :: Graph -> SCC a -> [[Vertex]]
+runSCC graph sccAction = do
   let (min,max) = bounds graph
       numberOfVertices = max - min + 1
-  initialVertexData <- Vector.replicate numberOfVertices Nothing
-  let initialState = SCCState 0 initialVertexData []
-  fmap snd $ evalRWST sccAction graph initialState
-
-getVertexData :: Vertex -> SCC s (Maybe SCCVertexData)
-getVertexData vertex = do
-  verticesData' <- gets verticesData
-  lift $ Vector.read verticesData' vertex
-
-hasNotBeenVisited :: Vertex -> SCC s Bool
-hasNotBeenVisited vertex = do
-  vertexData <- getVertexData vertex
-  return $ isNothing vertexData
+      initialVertexData = IntMap.empty
+      initialState = SCCState 0 initialVertexData []
+  snd $ evalRWS sccAction graph initialState
 
 tarjan :: Graph -> [[Vertex]]
 tarjan graph = runSCC graph tarjanSCC
 
-tarjanSCC :: SCC s ()
+tarjanSCC :: SCC ()
 tarjanSCC = do
   graph <- ask
   forM_ (vertices graph) $ \vertex -> do
-    notVisited <- hasNotBeenVisited vertex
-    when notVisited $ do
+    mVertexData <- use $ verticesData . at vertex
+    when (isNothing mVertexData) $ do
       strongConnect vertex
 
-strongConnect :: Vertex -> SCC s ()
-strongConnect vertex = return ()
+successors :: Graph -> Vertex -> [Vertex]
+successors = (!)
+
+strongConnect :: Vertex -> SCC ()
+strongConnect vertex = do
+  currentIndex <- use globalIndex
+  let vertexDataL = verticesData . at vertex
+  vertexDataL .= (Just $ VertexData currentIndex currentIndex True)
+  globalIndex += 1
+  visitedStack %= (vertex:)
+  graph <- ask
+  forM_ (successors graph vertex) $ \successor -> do
+    let successorDataL = verticesData . at successor
+    mSuccessorData <- use successorDataL
+    case mSuccessorData of
+      Nothing -> do
+        strongConnect successor
+        newSuccessorData <- fmap fromJust $ use successorDataL
+        vertexDataL %= fmap (\vertData -> vertData {
+                           _lowLink = min (_lowLink vertData) (_lowLink newSuccessorData)
+                           })
+      Just successorData -> do
+        when (_isInStack successorData) $ do
+          vertexDataL %= fmap (\vertData -> vertData {
+                             _lowLink = min (_index successorData) (_lowLink vertData)
+                             })
+  let vertexDataL' = verticesData . at vertex
+  mVertexData <- use vertexDataL'
+  case mVertexData of
+    Nothing -> error "The vertex data should be defined at this point in the algorithm. This shouldn't happen."
+    Just vertexData -> do
+      when (_lowLink vertexData == _index vertexData) $ do
+        scc <- buildCurrentSCC vertex
+        tell [scc]
+
+buildCurrentSCC :: Vertex -> SCC [Vertex]
+buildCurrentSCC root = do
+  vertex <- pop
+  if vertex == root 
+    then do
+      return [vertex]
+    else do
+      rest <- buildCurrentSCC root
+      return (vertex:rest)
+
+pop :: SCC Vertex
+pop = do
+  stack <- use visitedStack
+  visitedStack %= Prelude.tail
+  return $ Prelude.head stack
+
