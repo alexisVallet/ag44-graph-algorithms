@@ -1,25 +1,16 @@
+{-|
+This module implements Tarjan's algorithm to determine the strongly
+connected components of a directed graph.
+-}
 module StronglyConnectedComponents
        (
-         fromFile,
          tarjan
        ) where
 
-import Data.Graph (
-  Graph(..),
-  vertices,
-  edges,
-  Vertex(..), 
-  Edge(..), 
-  Table(..), 
-  Bounds(..))
+import Data.Array as Array
 import Data.IntMap as IntMap
 import Prelude as Prelude hiding ((.))
 import Control.Category
-import System.IO as IO
-import Data.ByteString as ByteString
-import Data.Array as Array hiding (index)
-import Data.Char (ord)
-import Data.Word
 import Control.Monad.RWS.Strict
 import Control.Lens
 import Control.Lens.IndexedLens
@@ -28,52 +19,28 @@ import Control.Monad
 import Control.Applicative
 import Data.Maybe
 
-fromFile :: FilePath -> IO Graph
-fromFile filePath = do
-  rawData <- ByteString.readFile filePath
-  return $ rawDataToGraph rawData
+import GraphUtils
 
-toWord :: Char -> Word8
-toWord = fromIntegral . ord
-
-rawDataToGraph :: ByteString -> Graph
-rawDataToGraph rawData =
-  let lines = ByteString.split (toWord '\n') rawData
-      adjacencyLists = Prelude.map lineToAdjList lines
-      numberOfVertices = Prelude.length lines in
-  listArray
-  (0,numberOfVertices-1) 
-  adjacencyLists
-
-lineToAdjList :: ByteString -> [Vertex]
-lineToAdjList line =
-  snd 
-  $ ByteString.foldr
-  (\word (index,vertices) -> 
-    let isZero = word == toWord '0'
-        isOne = word == toWord '1'
-        newIndex = if isZero || isOne then index + 1 else index
-        newVertices = if isOne then index:vertices else vertices in
-    (newIndex, newVertices))
-  (0,[])
-  line
-
+-- | Data associated to a single vertex in Tarjan's algorithm.
 data VertexData = VertexData {
-  _index :: Int,
-  _lowLink :: Int,
-  _isInStack :: Bool
+  _index :: Int, -- | Pre-ordering index of the vertex
+  _lowLink :: Int, -- | Index of the root of the connected component
+  _isInStack :: Bool -- | True iff the vertex is in the stack of the visited vertex, as an optimisation to avoid O(n) lookup in the stack.
   }
 makeLenses ''VertexData
 
+-- | State threaded throughout tarjan's algorithm.
 data SCCState = SCCState {
-  _globalIndex :: Int,
-  _verticesData :: IntMap VertexData,
-  _visitedStack :: [Vertex]
+  _globalIndex :: Int, -- | Current global index, indicates the pre-ordering of a newly visited vertex.
+  _verticesData :: IntMap VertexData, -- | Map storing informations about the vertices. If it is undefined for a vertex, then this vertex has not been visited yet.
+  _visitedStack :: [Vertex] -- | Stack storing the visited vertex. Vertices are pushed to the stack when first visited, then popped once the root of the strongly connected component has been reached.
   }
 makeLenses ''SCCState
 
+-- | The SCC monad for Tarjan's algorithm, is a reader on the input graph, a writer on the output strongly connected components, and threads the necessary state.
 type SCC = RWS Graph [[Vertex]] SCCState
 
+-- | Runs a computation in the SCC monad.
 runSCC :: Graph -> SCC a -> [[Vertex]]
 runSCC graph sccAction = do
   let (min,max) = bounds graph
@@ -82,9 +49,14 @@ runSCC graph sccAction = do
       initialState = SCCState 0 initialVertexData []
   snd $ evalRWS sccAction graph initialState
 
+-- | Returns the strongly connected components of the graph,
+-- computed using Tarjan's algorithm.
 tarjan :: Graph -> [[Vertex]]
 tarjan graph = runSCC graph tarjanSCC
 
+-- | Main loop procedure for Tarjan's algorithm, iterates
+-- over all vertices in the graph which have not yet been
+-- associated to a strongly connected component.
 tarjanSCC :: SCC ()
 tarjanSCC = do
   graph <- ask
@@ -93,16 +65,20 @@ tarjanSCC = do
     when (isNothing mVertexData) $ do
       strongConnect vertex
 
-successors :: Graph -> Vertex -> [Vertex]
-successors = (Array.!)
-
+-- | Visits the current vertices and its unvisited successors
+-- recursively to determine the stongly connected component of
+-- a vertex.
 strongConnect :: Vertex -> SCC ()
 strongConnect vertex = do
+  -- Marks the vertex as visited and pushes it to the stack.
   currentIndex <- use globalIndex
   verticesData . at vertex .= (Just $ VertexData currentIndex currentIndex True)
   globalIndex += 1
   visitedStack %= (vertex:)
   graph <- ask
+  -- Iterates over each successor of the current vertex. If the
+  -- successor has not been visited, visit it recursively. Determines
+  -- the new root of the strongly connected component accordingly.
   forM_ (successors graph vertex) $ \successor -> do
     mSuccessorData <- use $ verticesData . at successor
     case mSuccessorData of
@@ -115,10 +91,15 @@ strongConnect vertex = do
         verticesData . at vertex %=
           (fmap $ lowLink %~ (min $ successorData ^. index))
   vertexData <- fmap fromJust $ use $ verticesData . at vertex
+  -- | If the current vertex is the root, then we have found a
+  -- strongly connected component. Constructs if by popping the
+  -- stack.
   when (vertexData ^. lowLink == vertexData ^. index) $ do
     scc <- buildCurrentSCC vertex
     tell [scc]
 
+-- | Builds the current strongly connected component
+-- from its root by popping the stack.
 buildCurrentSCC :: Vertex -> SCC [Vertex]
 buildCurrentSCC root = do
   vertex <- pop
@@ -129,6 +110,7 @@ buildCurrentSCC root = do
       rest <- buildCurrentSCC root
       return (vertex:rest)
 
+-- | Pops the stack of visited nodes.
 pop :: SCC Vertex
 pop = do
   stack <- use visitedStack
