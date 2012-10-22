@@ -12,7 +12,7 @@ import Data.Graph (
   Edge(..), 
   Table(..), 
   Bounds(..))
-import Data.IntMap as IntMap hiding ((!))
+import Data.IntMap as IntMap
 import Prelude as Prelude hiding ((.))
 import Control.Category
 import System.IO as IO
@@ -20,10 +20,10 @@ import Data.ByteString as ByteString
 import Data.Array as Array hiding (index)
 import Data.Char (ord)
 import Data.Word
-import Control.Monad.ST
 import Control.Monad.RWS.Strict
 import Control.Lens
-import Control.Monad.Primitive
+import Control.Lens.IndexedLens
+import Control.Lens.TH
 import Control.Monad
 import Control.Applicative
 import Data.Maybe
@@ -72,7 +72,6 @@ data SCCState = SCCState {
   }
 makeLenses ''SCCState
 
-
 type SCC = RWS Graph [[Vertex]] SCCState
 
 runSCC :: Graph -> SCC a -> [[Vertex]]
@@ -95,39 +94,30 @@ tarjanSCC = do
       strongConnect vertex
 
 successors :: Graph -> Vertex -> [Vertex]
-successors = (!)
+successors = (Array.!)
 
 strongConnect :: Vertex -> SCC ()
 strongConnect vertex = do
   currentIndex <- use globalIndex
-  let vertexDataL = verticesData . at vertex
-  vertexDataL .= (Just $ VertexData currentIndex currentIndex True)
+  verticesData . at vertex .= (Just $ VertexData currentIndex currentIndex True)
   globalIndex += 1
   visitedStack %= (vertex:)
   graph <- ask
   forM_ (successors graph vertex) $ \successor -> do
-    let successorDataL = verticesData . at successor
-    mSuccessorData <- use successorDataL
+    mSuccessorData <- use $ verticesData . at successor
     case mSuccessorData of
       Nothing -> do
         strongConnect successor
-        newSuccessorData <- fmap fromJust $ use successorDataL
-        vertexDataL %= fmap (\vertData -> vertData {
-                           _lowLink = min (_lowLink vertData) (_lowLink newSuccessorData)
-                           })
-      Just successorData -> do
-        when (_isInStack successorData) $ do
-          vertexDataL %= fmap (\vertData -> vertData {
-                             _lowLink = min (_index successorData) (_lowLink vertData)
-                             })
-  let vertexDataL' = verticesData . at vertex
-  mVertexData <- use vertexDataL'
-  case mVertexData of
-    Nothing -> error "The vertex data should be defined at this point in the algorithm. This shouldn't happen."
-    Just vertexData -> do
-      when (_lowLink vertexData == _index vertexData) $ do
-        scc <- buildCurrentSCC vertex
-        tell [scc]
+        newSuccessorData <- fmap fromJust $ use $ verticesData . at successor
+        verticesData . at vertex %= 
+          (fmap $ lowLink %~ (min $ newSuccessorData ^. lowLink))
+      Just successorData -> when (successorData ^. isInStack) $ do
+        verticesData . at vertex %=
+          (fmap $ lowLink %~ (min $ successorData ^. index))
+  vertexData <- fmap fromJust $ use $ verticesData . at vertex
+  when (vertexData ^. lowLink == vertexData ^. index) $ do
+    scc <- buildCurrentSCC vertex
+    tell [scc]
 
 buildCurrentSCC :: Vertex -> SCC [Vertex]
 buildCurrentSCC root = do
@@ -143,5 +133,7 @@ pop :: SCC Vertex
 pop = do
   stack <- use visitedStack
   visitedStack %= Prelude.tail
-  return $ Prelude.head stack
-
+  let poppedVertex = Prelude.head stack
+  verticesData . at poppedVertex %=
+    (fmap $ isInStack .~ False)
+  return poppedVertex
