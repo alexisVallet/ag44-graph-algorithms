@@ -6,6 +6,7 @@ module GraphUtils
          Graph(..),
          Vertex,
          vertices,
+         edges,
          successors,
          adjacencyMatrix
        ) where
@@ -22,6 +23,12 @@ vertices :: Graph -> [Vertex]
 vertices graph =
   let (min,max) = bounds graph in
   [min..max]
+
+edges :: Graph -> [(Vertex,Vertex)]
+edges graph = 
+  concatMap 
+  (\vertex -> zip (repeat vertex) (successors graph vertex)) 
+  $ vertices graph
 
 -- | Returns the adjacency matrix of the graph.
 adjacencyMatrix :: Graph -> Array (Vertex,Vertex) Bool

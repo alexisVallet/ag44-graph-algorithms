@@ -12,6 +12,7 @@ import StronglyConnectedComponents
 
 import GraphUtils
 import Data.Array as Array
+import Data.List
 
 -- | The condensation of a graph, contracting every
 -- strongly connected component in the graph to a
@@ -19,16 +20,19 @@ import Data.Array as Array
 condensation :: Graph -> Graph
 condensation graph = contraction graph (tarjan graph)
 
--- | Condensate a graph given its list of strongly connected
+-- | Condensates a graph given its list of strongly connected
 -- components.
 contraction :: Graph -> [[Vertex]] -> Graph
-contraction graph sccs = undefined
-  -- let
-  --   compList = [0..]
-  --   size = length sccs
-  --   bounds' = bounds graph
-  --   vertToCompArray = 
-  --     array (bounds',bounds')
-  --     $ concat
-  --     $ zipWith (\scc comp -> map ((,) comp) scc) sccs compList in
-  -- array (0, size-1) $ map 
+contraction graph sccs =
+  let
+    compList = [0..]
+    size = length sccs
+    vertToCompArray = 
+      array (bounds graph)
+      $ concat
+      $ zipWith (\scc comp -> map ((,) comp) scc) sccs compList
+    newNeighbors vertex =
+      map (vertToCompArray !)
+      $ successors graph vertex
+    compNeighbors comp = nub $ concatMap newNeighbors comp in
+  listArray (0,size-1) $ map compNeighbors sccs
