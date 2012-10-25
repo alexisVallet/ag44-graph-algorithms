@@ -14,12 +14,17 @@ testTopologicalSort :: Test
 testTopologicalSort =
   testProperty "Returns a valid topological sorting of the graph condensation" pIsTopological
 
-pIsTopological :: Graph -> Bool
+pIsTopological :: Graph -> Property
 pIsTopological graph =
   let
     condensationGraph = condensation graph    
-    sorting = topologicalSort condensationGraph in
-  isTopological condensationGraph sorting
+    sorting = topologicalSort condensationGraph 
+    showResults = do
+      putStrLn $ "Condensation: " ++ show graph
+      putStrLn $ "Sorting: " ++ show sorting
+      in
+  whenFail showResults
+  $ isTopological condensationGraph sorting
 
 isTopological :: Graph -> [Vertex] -> Bool
 isTopological graph ordering =

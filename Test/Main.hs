@@ -2,9 +2,13 @@ module Main (main) where
 
 import Test.Framework
 import Test.StronglyConnectedComponents
+import Test.Condensation
 import Test.TopologicalSort
+import Test.GraphUtils
 
 main :: IO ()
 main = defaultMain 
-       [testSCC
+       [testGraphUtils
+       ,testSCC
+       ,testCondensation
        ,testTopologicalSort]

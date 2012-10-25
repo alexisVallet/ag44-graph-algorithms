@@ -13,6 +13,7 @@ import StronglyConnectedComponents
 import GraphUtils
 import Data.Array as Array
 import Data.List
+import Control.Exception (assert)
 
 -- | The condensation of a graph, contracting every
 -- strongly connected component in the graph to a
@@ -24,15 +25,14 @@ condensation graph = contraction graph (tarjan graph)
 -- components.
 contraction :: Graph -> [[Vertex]] -> Graph
 contraction graph sccs =
-  let
-    compList = [0..]
-    size = length sccs
-    vertToCompArray = 
-      array (bounds graph)
-      $ concat
-      $ zipWith (\scc comp -> map ((,) comp) scc) sccs compList
-    newNeighbors vertex =
-      map (vertToCompArray !)
-      $ successors graph vertex
-    compNeighbors comp = nub $ concatMap newNeighbors comp in
-  listArray (0,size-1) $ map compNeighbors sccs
+  let successorsOf scc =
+        nub $ map vertToComp $ foldr union [] (map (successors graph) scc)
+      vertToComp vertex = 
+        case findIndex (elem vertex) sccs of
+          Nothing -> error 
+                     $ "The vertex " 
+                     ++ show vertex 
+                     ++ " does not appear in any of the SCCS: "
+                     ++ show sccs
+          Just componentIndex -> componentIndex - 1 in
+  listArray (0,length sccs - 1) $ map successorsOf sccs
