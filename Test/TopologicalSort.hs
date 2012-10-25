@@ -14,19 +14,20 @@ testTopologicalSort :: Test
 testTopologicalSort =
   testProperty "Returns a valid topological sorting of the graph condensation" pIsTopological
 
-pIsTopological :: Graph -> Property
-pIsTopological graph =
+pIsTopological :: DAG -> Property
+pIsTopological (DAG graph) =
   let
-    condensationGraph = condensation graph    
-    sorting = topologicalSort condensationGraph 
+    sorting = topologicalSort graph
     showResults = do
-      putStrLn $ "Condensation: " ++ show graph
       putStrLn $ "Sorting: " ++ show sorting
       in
   whenFail showResults
-  $ isTopological condensationGraph sorting
+  $ isTopological graph sorting
 
 isTopological :: Graph -> [Vertex] -> Bool
 isTopological graph ordering =
   all (\(u,v) -> u `comesBefore` v) $ edges graph
-  where u `comesBefore` v = ordering !! u <= ordering !! v
+  where u `comesBefore` v =
+          case (findIndex (==u) ordering,findIndex (==v) ordering) of
+            (Just i,Just j) -> i < j
+            _ -> error "The ordering is not a permutation!"

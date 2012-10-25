@@ -25,12 +25,25 @@ testGraphUtils =
    pAdjListAdjMatrixInverse,
    testProperty
    "adjacencyMatrix is the inverse of adjacencyList"
-   pAdjMatrixAdjListInverse]
+   pAdjMatrixAdjListInverse,
+   testProperty
+   "hasACycle returns False when given a DAG"
+   pHasACycleFalseOnDAG]
 
-pAdjListAdjMatrixInverse :: Graph -> Bool
+pAdjListAdjMatrixInverse :: Graph -> Property
 pAdjListAdjMatrixInverse graph =
-  adjacencyList (adjacencyMatrix graph) `graphEq` graph
+  let adjMatrix = adjacencyMatrix graph
+      adjList' = adjacencyList adjMatrix
+      showResults = do
+        putStrLn $ "Initial graph: " ++ show graph
+        putStrLn $ "Adjacency matrix: " ++ show adjMatrix
+        putStrLn $ "New graph: " ++ show adjList' in
+  whenFail showResults $ adjList' `graphEq` graph
 
 pAdjMatrixAdjListInverse :: Array (Vertex,Vertex) Bool -> Bool
 pAdjMatrixAdjListInverse adjMatrix =
   adjacencyMatrix (adjacencyList adjMatrix) == adjMatrix
+
+pHasACycleFalseOnDAG :: DAG -> Bool
+pHasACycleFalseOnDAG (DAG graph) =
+  hasACycle graph == False

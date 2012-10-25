@@ -26,7 +26,12 @@ condensation graph = contraction graph (tarjan graph)
 contraction :: Graph -> [[Vertex]] -> Graph
 contraction graph sccs =
   let successorsOf scc =
-        nub $ map vertToComp $ foldr union [] (map (successors graph) scc)
+        nub 
+        $ map vertToComp 
+        $ foldr union [] 
+        (map (\vertex -> 
+               filter (\successor -> not $ elem successor scc)
+               $ successors graph vertex) scc)
       vertToComp vertex = 
         case findIndex (elem vertex) sccs of
           Nothing -> error 
@@ -34,5 +39,5 @@ contraction graph sccs =
                      ++ show vertex 
                      ++ " does not appear in any of the SCCS: "
                      ++ show sccs
-          Just componentIndex -> componentIndex - 1 in
+          Just componentIndex -> componentIndex in
   listArray (0,length sccs - 1) $ map successorsOf sccs

@@ -21,7 +21,9 @@ pCondensationSize graph =
       graphCondensation = condensation graph in
   length sccs == length (vertices graphCondensation)
 
-pCondensationIsDAG :: Graph -> Bool
+pCondensationIsDAG :: Graph -> Property
 pCondensationIsDAG graph =
-  let graphCondensation = condensation graph in
-  not $ hasACycle graphCondensation
+  let graphCondensation = condensation graph
+      showResults = do
+        putStrLn $ "Graph condensation: " ++ show graphCondensation in
+  whenFail showResults $ not $ hasACycle graphCondensation

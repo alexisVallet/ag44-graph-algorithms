@@ -45,13 +45,13 @@ adjacencyMatrix :: Graph -> Array (Vertex,Vertex) Bool
 adjacencyMatrix graph =
   let vertices' = vertices graph
       (min,max) = bounds graph in
-  array ((min,max),(min,max)) 
+  array ((min,min),(max,max)) 
   $ [((i,j),j `elem` (graph!i)) | i <- vertices', j <- vertices']
 
 -- | Converts from adjacency matrix to adjacency list.
 adjacencyList :: Array (Vertex,Vertex) Bool -> Graph
 adjacencyList adjMatrix =
-  let ((min,max),_) = bounds adjMatrix
+  let ((min,_),(max,_)) = bounds adjMatrix
       vertices' = [min..max]
       successors' vertex = 
         findIndices id 
