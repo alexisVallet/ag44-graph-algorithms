@@ -15,7 +15,7 @@ maintainer:          alexis.vallet@gmail.com
 build-type:          Simple
 cabal-version:       >=1.8
 
-executable ag44-graph-algorithms
+executable graph_algorithms
   main-is: Main.hs
   extensions: TemplateHaskell, FlexibleContexts, RankNTypes, DeriveDataTypeable
   -- other-modules:       

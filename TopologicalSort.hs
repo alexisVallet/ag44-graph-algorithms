@@ -22,22 +22,31 @@ data TSState = TSState {
   }
 makeLenses ''TSState
 
+-- | Monad for the topological sort.
 type TopSort = RWS Graph () TSState
 
+-- | Runs a computation in the topological sort monad.
 runTopSort :: Graph -> TopSort a -> [Vertex]
 runTopSort graph tssAction = 
   (fst $ execRWS tssAction graph (TSState empty [])) 
   ^. topologicalSorting
 
+-- | Computes a topological sort of a directed acyclic graph.
+-- Uses a DFS, runs in O(|V|+|E|).
 topologicalSort :: Graph -> [Vertex]
 topologicalSort graph = runTopSort graph topologicalSort'
 
+-- | Computes a topological sort in the topological sort monad.
+-- Simply the main loop of a DFS.
 topologicalSort' :: TopSort ()
 topologicalSort' = do
   graph <- ask
   forM_ (vertices graph) $ \vertex -> do
     visit vertex
 
+-- | Visits a vertex, visits its successors, then adds itself
+-- to the head of the topological sort, which puts all vertices
+-- in their post ordering, therefore yielding a topological sort.
 visit :: Vertex -> TopSort ()
 visit vertex = do
   visitedVertices' <- use visitedVertices

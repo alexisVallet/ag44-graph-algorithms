@@ -33,12 +33,13 @@ makeLenses ''VertexData
 data SCCState = SCCState {
   _globalIndex :: Int, -- | Current global index, indicates the pre-ordering of a newly visited vertex.
   _verticesData :: IntMap VertexData, -- | Map storing informations about the vertices. If it is undefined for a vertex, then this vertex has not been visited yet.
-  _visitedStack :: [Vertex] -- | Stack storing the visited vertex. Vertices are pushed to the stack when first visited, then popped once the root of the strongly connected component has been reached.
+  _visitedStack :: [Vertex], -- | Stack storing the visited vertex. Vertices are pushed to the stack when first visited, then popped once the root of the strongly connected component has been reached.
+  _sccs :: [[Vertex]]
   }
 makeLenses ''SCCState
 
 -- | The SCC monad for Tarjan's algorithm, is a reader on the input graph, a writer on the output strongly connected components, and threads the necessary state.
-type SCC = RWS Graph [[Vertex]] SCCState
+type SCC = RWS Graph () SCCState
 
 -- | Runs a computation in the SCC monad.
 runSCC :: Graph -> SCC a -> [[Vertex]]
@@ -46,8 +47,8 @@ runSCC graph sccAction = do
   let (min,max) = bounds graph
       numberOfVertices = max - min + 1
       initialVertexData = IntMap.empty
-      initialState = SCCState 0 initialVertexData []
-  snd $ evalRWS sccAction graph initialState
+      initialState = SCCState 0 initialVertexData [] []
+  (fst $ execRWS sccAction graph initialState) ^. sccs
 
 -- | Returns the strongly connected components of the graph,
 -- computed using Tarjan's algorithm.
@@ -96,7 +97,7 @@ strongConnect vertex = do
   -- stack.
   when (vertexData ^. lowLink == vertexData ^. index) $ do
     scc <- buildCurrentSCC vertex
-    tell [scc]
+    sccs %= (scc:)
 
 -- | Builds the current strongly connected component
 -- from its root by popping the stack.

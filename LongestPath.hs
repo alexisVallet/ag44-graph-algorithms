@@ -39,6 +39,7 @@ makeLenses ''LPState
 -- | Longest path monad.
 type LongestPath s = RWST Graph () (LPState s) (ST s)
 
+-- | Runs a computation in the longest path monad.
 runLongestPath :: Graph -> (forall s . LongestPath s a) -> [Vertex]
 runLongestPath graph lpAction = runST $ do
   initialVerticesData <- 
@@ -50,10 +51,14 @@ runLongestPath graph lpAction = runST $ do
   inversePath <- reconstructPath resultState
   return $ reverse inversePath
 
+-- | Reconstructs the path from the final state in
+-- the longest path algorithm.
 reconstructPath :: LPState s -> ST s [Vertex]
 reconstructPath state = 
   reconstructPath' state (state ^. bestLastVertex)
 
+-- | Auxiliary function to reconstructPath', recurses over
+-- predecessors until the entire path is found.
 reconstructPath' :: LPState s -> Maybe Vertex -> ST s [Vertex]
 reconstructPath' state mVertex =
   case mVertex of
@@ -63,10 +68,16 @@ reconstructPath' state mVertex =
       rest <- reconstructPath' state (vertexData ^. mPredecessor)
       return $ vertex:rest
 
+-- | Computes the longest path in a directed acyclic graph.
+-- Uses a dynamic programming approach to run in linear time.
+-- If the graph is connected, and has only one source and only one
+-- sink, then this will return the longest path between the source
+-- and the sink.
 longestPath :: Graph -> [Vertex]
 longestPath graph =
   runLongestPath graph longestPath'
 
+-- | Utility function to modify an element in a mutable vector.
 modify :: STVector s a -> Int -> (a -> a) -> ST s a
 modify vector index modification = do
   value <- read vector index
@@ -74,6 +85,7 @@ modify vector index modification = do
   write vector index newValue
   return newValue
 
+-- | Computes the longest path inside de longest path monad.
 longestPath' :: LongestPath s ()
 longestPath' = do
   graph <- ask

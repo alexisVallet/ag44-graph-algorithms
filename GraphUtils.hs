@@ -32,6 +32,7 @@ vertices graph =
   let (min,max) = bounds graph in
   [min..max]
 
+-- | Returns the edges of the graph.
 edges :: Graph -> [(Vertex,Vertex)]
 edges graph = 
   concatMap 
@@ -88,6 +89,7 @@ makeLenses ''CDState
 -- an escape continuation to exit as soon as a cycle is found.
 type CDMonad = ContT Bool (RWS Graph () CDState)
 
+-- | Runs a computation in the cycle detection monad.
 runCycleDetection :: Graph 
                      -> CDMonad Bool
                      -> Bool
@@ -114,6 +116,9 @@ hasACycle' = callCC $ \exit -> do
       Just _ -> return ()
   return False
 
+-- | Visits a vertex in the cycle detection algorithm.
+-- Takes an escape continuation which it will call whenever
+-- a cycle is encountered.
 cdVisit :: (Bool -> CDMonad ()) -> Vertex -> CDMonad ()
 cdVisit exit vertex = do
   verticesColor . at vertex .= Just Gray

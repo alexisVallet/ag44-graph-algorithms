@@ -1,3 +1,7 @@
+{-|
+Provides artbitrary instances for adjacency lists, adjacency matrices
+and directed acyclic graphs as adjacency lists.
+-}
 module Test.ArbitraryInstances where
 
 import Test.QuickCheck
@@ -8,9 +12,11 @@ import Control.Monad.List
 
 import GraphUtils
 
+-- | Maximum number of vertices for the graphs generated.
 maxNumberOfVertices :: Int
 maxNumberOfVertices = 100
 
+-- | Adjacency list arbitrary instance.
 instance Arbitrary (Array Int [Int]) where
   arbitrary = do
     size <- choose (0, maxNumberOfVertices) :: Gen Int
@@ -35,7 +41,8 @@ instance Arbitrary (Array (Vertex,Vertex) Bool) where
 newtype DAG = DAG Graph deriving (Show)
 
 -- | Generates random directed acyclic graphs by generating
--- lower triangular random adjacency matrices.
+-- lower triangular random adjacency matrices. Inspired
+-- by http://mathematica.stackexchange.com/questions/608/how-to-generate-random-directed-acyclic-graphs
 instance Arbitrary DAG where
   arbitrary = do
     size <- choose (1, maxNumberOfVertices)
