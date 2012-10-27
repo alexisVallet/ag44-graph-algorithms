@@ -7,7 +7,9 @@ module GraphUtils
          Vertex,
          vertices,
          edges,
+         order,
          successors,
+         predecessors,
          adjacencyMatrix,
          adjacencyList,
          hasACycle
@@ -24,10 +26,6 @@ import Control.Lens.IndexedLens
 import Control.Lens.TH
 import Data.IntMap hiding ((!))
 
--- | Returns the successors of a vertex in a graph.
-successors :: Graph -> Vertex -> [Vertex]
-successors = (!)
-
 -- | Returns the vertices of the graph.
 vertices :: Graph -> [Vertex]
 vertices graph =
@@ -39,6 +37,21 @@ edges graph =
   concatMap 
   (\vertex -> zip (repeat vertex) (successors graph vertex)) 
   $ vertices graph
+
+-- | Returns the order of the graph, ie. its number of vertices.
+order :: Graph -> Int
+order graph =
+  let (min,max) = bounds graph in
+  max - min + 1
+
+-- | Returns the successors of a vertex in a graph.
+successors :: Graph -> Vertex -> [Vertex]
+successors = (!)
+
+-- | Returns the predecessors of a vertex in a graph.
+predecessors :: Graph -> Vertex -> [Vertex]
+predecessors graph vertex =
+  [v | v <- vertices graph, elem vertex (successors graph v)]
 
 -- | Returns the adjacency matrix of the graph.
 adjacencyMatrix :: Graph -> Array (Vertex,Vertex) Bool

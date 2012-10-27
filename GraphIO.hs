@@ -35,9 +35,9 @@ toWord = fromIntegral . ord
 -- into a graph.
 rawDataToGraph :: ByteString.ByteString -> Graph
 rawDataToGraph rawData =
-  let lines = ByteString.split (toWord '\n') rawData
-      adjacencyLists = Prelude.map lineToAdjList lines
-      numberOfVertices = Prelude.length lines in
+  let (first:lines) = ByteString.split (toWord '\n') rawData
+      numberOfVertices = read (show first) :: Int
+      adjacencyLists = Prelude.map lineToAdjList lines in
   listArray
   (0,numberOfVertices-1) 
   adjacencyLists

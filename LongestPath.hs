@@ -9,25 +9,106 @@ module LongestPath (longestPath) where
 import GraphUtils
 import TopologicalSort
 
-import Control.Monad.RWS
+import Prelude hiding (read, replicate)
+import Control.Monad.ST
+import Control.Monad.RWS.Strict hiding (modify)
 import Control.Monad
 import Control.Lens
 import Control.Lens.TH
+import Data.Vector.Mutable
+import Data.Maybe
 
+-- | Data associated to a vertex for the longest path algorithm.
+-- Keeps track of the longest length to the vertex, and its
+-- predecessor in the longest path containing it.
 data LPVertexData = LPVertexData {
   _lengthTo :: Int,
-  _predecessor :: Vertex
+  _mPredecessor :: Maybe Vertex
   }
 makeLenses ''LPVertexData
 
-data LPState = LPState {
-  _vertexData :: IntMap LPVertexData
+-- | State threaded throughout the longest path algorithm.
+-- Keeps track of the data associated to each vertex, and
+-- of the best last vertex in the path.
+data LPState s = LPState {
+  _verticesData :: STVector s LPVertexData,
+  _bestLastVertex :: Maybe Vertex
   }
 makeLenses ''LPState
 
-type LP = RWS Graph () LPState
+-- | Longest path monad.
+type LongestPath s = RWST Graph () (LPState s) (ST s)
 
-runLongestPath :: Graph -> LP a -> [Vertex]
+runLongestPath :: Graph -> (forall s . LongestPath s a) -> [Vertex]
+runLongestPath graph lpAction = runST $ do
+  initialVerticesData <- 
+    replicate (order graph) (LPVertexData 0 Nothing)
+  let initialState = LPState initialVerticesData Nothing
+  resultState <- 
+    fmap fst
+    $ execRWST lpAction graph initialState
+  inversePath <- reconstructPath resultState
+  return $ reverse inversePath
 
-absoluteLongestPath :: Graph -> [Vertex]
-absoluteLongestPath graph = undefined
+reconstructPath :: LPState s -> ST s [Vertex]
+reconstructPath state = 
+  reconstructPath' state (state ^. bestLastVertex)
+
+reconstructPath' :: LPState s -> Maybe Vertex -> ST s [Vertex]
+reconstructPath' state mVertex =
+  case mVertex of
+    Nothing -> return []
+    Just vertex -> do
+      vertexData <- read (state ^. verticesData) vertex
+      rest <- reconstructPath' state (vertexData ^. mPredecessor)
+      return $ vertex:rest
+
+longestPath :: Graph -> [Vertex]
+longestPath graph =
+  runLongestPath graph longestPath'
+
+modify :: STVector s a -> Int -> (a -> a) -> ST s a
+modify vector index modification = do
+  value <- read vector index
+  let newValue = modification value
+  write vector index newValue
+  return newValue
+
+longestPath' :: LongestPath s ()
+longestPath' = do
+  graph <- ask
+  let topSort = topologicalSort graph
+  case topSort of
+    -- If we have a null graph then the best (only) path is empty,
+    -- the loop will not get executed and the best vertex will stay
+    -- Nothing which will result in an empty path.
+    [] -> return ()
+    -- Otherwise we initialize the best vertex as the first, so
+    -- we can assume in the rest of the algorithm that the best vertex
+    -- is defined.
+    (first:_) -> do
+      bestLastVertex .= Just first
+  -- We take the vertices in the topological order, and examine each
+  -- of their successors in turn.
+  forM_ topSort $ \vertex -> do
+    forM_ (successors graph vertex) $ \successor -> do
+      verticesData' <- use $ verticesData
+      vertexData <- lift $ read verticesData' vertex
+      successorData <- lift $ read verticesData' successor
+      -- When we have found a longer path to the successor, update
+      -- length and predecessor label accordingly.
+      when (successorData ^. lengthTo <= vertexData ^. lengthTo + 1) $ do
+        lift 
+          $ modify verticesData' successor 
+          $ lengthTo .~ vertexData ^. lengthTo + 1
+        newSuccessorData <- lift 
+                            $ modify verticesData' successor
+                            $ mPredecessor .~ Just vertex
+        -- Updates the best end node if the path found is longer.
+        currentBest <- fmap fromJust $ use bestLastVertex
+        currentBestData <- lift $ read verticesData' currentBest
+        bestLastVertex .=
+          (Just $ if currentBestData ^. lengthTo 
+                     < newSuccessorData ^. lengthTo
+                  then successor
+                  else currentBest)
