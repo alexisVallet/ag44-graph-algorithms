@@ -11,19 +11,24 @@ import qualified Data.Graph as Graph
 benchSCCs :: Benchmark
 benchSCCs =
   let
-    (smallGraph, mediumGraph, largeGraph) = 
+    (smallGraph, smallishGraph, mediumGraph, largeishGraph, largeGraph) = 
       flip evalRand (mkStdGen 0) $ do
-        small <- randomGraphOfSize 50 500
+        small <- randomGraphOfSize 100 1000
+        smallish <- randomGraphOfSize 300 3000
         medium <- randomGraphOfSize 500 5000
-        large <- randomGraphOfSize 1000 10000
-        return (small, medium, large) in
-  bgroup "Comparison between tarjan and scc"
-  [bcompare
-   [bench "Data.Graph.scc: small graph" $ nf Graph.scc smallGraph,
-    bench "tarjan: small graph" $ nf tarjan smallGraph],
-   bcompare
-   [bench "Data.Graph.scc: medium graph" $ nf Graph.scc mediumGraph,
-    bench "tarjan: medium graph" $ nf tarjan mediumGraph],
-   bcompare
-   [bench "Data.Graph.scc: large graph" $ nf Graph.scc largeGraph,
-    bench "tarjan: large graph" $ nf tarjan largeGraph]]
+        largeish <- randomGraphOfSize 700 7000
+        large <- randomGraphOfSize 900 9000
+        return (small, smallish, medium, largeish, large) in
+  bcompare
+  [bgroup "Data.Graph.scc"
+   [bench "100 vertices" $ nf Graph.scc smallGraph,
+    bench "300 vertices" $ nf Graph.scc smallishGraph,
+    bench "500 vertices" $ nf Graph.scc mediumGraph,
+    bench "700 vertices" $ nf Graph.scc largeishGraph,
+    bench "900 vertices" $ nf Graph.scc largeGraph],
+   bgroup "tarjan"
+   [bench "100 vertices" $ nf tarjan smallGraph,
+    bench "300 vertices" $ nf tarjan smallishGraph,
+    bench "500 vertices" $ nf tarjan mediumGraph,
+    bench "700 vertices" $ nf tarjan largeishGraph,
+    bench "900 vertices" $ nf tarjan largeGraph]]

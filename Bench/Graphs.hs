@@ -36,7 +36,7 @@ randomGraphOfSize numberOfVertices numberOfEdges = do
   let vertices = [0..numberOfVertices-1]
   edges <- fmap (take numberOfEdges) 
            $ shuffle [(i,j) | i <- vertices, j <- vertices]
-  return 
+  return
     $ adjacencyList
     $ array
     ((0,0),(numberOfVertices-1,numberOfVertices-1))
