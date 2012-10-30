@@ -8,7 +8,7 @@ module StronglyConnectedComponents
        ) where
 
 import Data.Array as Array
-import Data.Vector.Mutable as Vector
+import Data.Vector.Unboxed.Mutable as Vector
 import Prelude as Prelude hiding ((.),replicate,read)
 import Control.Category
 import Control.Monad.RWS.Strict
@@ -23,19 +23,13 @@ import Data.Maybe
 import GraphUtils
 import VectorUtils
 
--- | Data associated to a single vertex in Tarjan's algorithm.
-data VertexData = VertexData {
-  _index :: Int, -- | Pre-ordering index of the vertex
-  _lowLink :: Int, -- | Index of the root of the connected component
-  _isInStack :: Bool -- | True iff the vertex is in the stack of the visited vertex, as an optimisation to avoid O(n) lookup in the stack.
-  }
-makeLenses ''VertexData
-
 -- | State threaded throughout tarjan's algorithm.
 data SCCState s = SCCState {
-  _globalIndex :: Int, -- | Current global index, indicates the pre-ordering of a newly visited vertex.
-  _verticesData :: STVector s (Maybe VertexData), -- | Map storing informations about the vertices. If it is undefined for a vertex, then this vertex has not been visited yet.
-  _visitedStack :: [Vertex], -- | Stack storing the visited vertex. Vertices are pushed to the stack when first visited, then popped once the root of the strongly connected component has been reached.
+  _globalIndex :: Int,
+  _verticesIndex :: STVector s Int,
+  _verticesLowLink :: STVector s Int,
+  _verticesInStack :: STVector s Bool,
+  _visitedStack :: [Vertex],
   _sccs :: [[Vertex]]
   }
 makeLenses ''SCCState
@@ -46,8 +40,12 @@ type SCC s = RWST Graph () (SCCState s) (ST s)
 -- | Runs a computation in the SCC monad.
 runSCC :: Graph -> (forall s . SCC s a) -> [[Vertex]]
 runSCC graph sccAction = runST $ do
-  initialVerticesData <- replicate (order graph) Nothing
-  let initialState = SCCState 0 initialVerticesData [] []
+  let numberOfVertices = order graph
+  initialIndices <- replicate numberOfVertices (-1)
+  initialLowLinks <- replicate numberOfVertices (-1)
+  initialInStack <- replicate numberOfVertices False
+  let initialState = 
+        SCCState 0 initialIndices initialLowLinks initialInStack [] []
   (lastState,_) <- execRWST sccAction graph initialState
   return $ lastState ^. sccs
 
@@ -63,8 +61,8 @@ tarjanSCC :: SCC s ()
 tarjanSCC = do
   graph <- ask
   forM_ (vertices graph) $ \vertex -> do
-    mVertexData <- readL verticesData vertex
-    when (isNothing mVertexData) $ do
+    vertexIndex <- readL verticesIndex vertex
+    when (vertexIndex < 0) $ do
       strongConnect vertex
 
 -- | Visits the current vertices and its unvisited successors
@@ -74,7 +72,9 @@ strongConnect :: Vertex -> SCC s ()
 strongConnect vertex = do
   -- Marks the vertex as visited and pushes it to the stack.
   currentIndex <- use globalIndex
-  writeL verticesData vertex $ Just $ VertexData currentIndex currentIndex True
+  writeL verticesIndex vertex currentIndex 
+  writeL verticesLowLink vertex currentIndex 
+  writeL verticesInStack vertex True
   globalIndex += 1
   visitedStack %= (vertex:)
   graph <- ask
@@ -82,21 +82,22 @@ strongConnect vertex = do
   -- successor has not been visited, visit it recursively. Determines
   -- the new root of the strongly connected component accordingly.
   forM_ (successors graph vertex) $ \successor -> do
-    mSuccessorData <- readL verticesData successor
-    case mSuccessorData of
-      Nothing -> do
+    successorIndex <- readL verticesIndex successor
+    if successorIndex < 0 
+      then do
         strongConnect successor
-        newSuccessorData <- fmap fromJust $ readL verticesData successor
-        modifyL verticesData vertex $ 
-          fmap $ lowLink %~ (min $ newSuccessorData ^. lowLink)
-      Just successorData -> when (successorData ^. isInStack) $ do
-        modifyL verticesData vertex $
-          fmap $ lowLink %~ (min $ successorData ^. index)
-  vertexData <- fmap fromJust $ readL verticesData vertex
+        newSuccessorLowLink <- readL verticesLowLink successor
+        modifyL verticesLowLink vertex $ min newSuccessorLowLink
+      else do
+        successorInStack <- readL verticesInStack successor
+        when successorInStack $ do
+        modifyL verticesLowLink vertex $ min successorIndex
+  vertexIndex <- readL verticesIndex vertex
+  vertexLowLink <- readL verticesLowLink vertex
   -- | If the current vertex is the root, then we have found a
   -- strongly connected component. Constructs if by popping the
   -- stack.
-  when (vertexData ^. lowLink == vertexData ^. index) $ do
+  when (vertexLowLink == vertexIndex) $ do
     scc <- buildCurrentSCC vertex
     sccs %= (scc:)
 
@@ -118,6 +119,5 @@ pop = do
   stack <- use visitedStack
   visitedStack %= Prelude.tail
   let poppedVertex = Prelude.head stack
-  modifyL verticesData poppedVertex $
-    fmap $ isInStack .~ False
+  writeL verticesInStack poppedVertex False
   return poppedVertex
