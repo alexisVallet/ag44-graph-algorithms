@@ -8,6 +8,7 @@ module LongestPath (longestPath) where
 
 import GraphUtils
 import TopologicalSort
+import VectorUtils
 
 import Prelude hiding (read, replicate)
 import Control.Monad.ST
@@ -77,14 +78,6 @@ longestPath :: Graph -> [Vertex]
 longestPath graph =
   runLongestPath graph longestPath'
 
--- | Utility function to modify an element in a mutable vector.
-modify :: STVector s a -> Int -> (a -> a) -> ST s a
-modify vector index modification = do
-  value <- read vector index
-  let newValue = modification value
-  write vector index newValue
-  return newValue
-
 -- | Computes the longest path inside de longest path monad.
 longestPath' :: LongestPath s ()
 longestPath' = do
@@ -104,21 +97,18 @@ longestPath' = do
   -- of their successors in turn.
   forM_ topSort $ \vertex -> do
     forM_ (successors graph vertex) $ \successor -> do
-      verticesData' <- use $ verticesData
-      vertexData <- lift $ read verticesData' vertex
-      successorData <- lift $ read verticesData' successor
+      vertexData <- readL verticesData vertex
+      successorData <- readL verticesData successor
       -- When we have found a longer path to the successor, update
       -- length and predecessor label accordingly.
       when (successorData ^. lengthTo <= vertexData ^. lengthTo + 1) $ do
-        lift 
-          $ modify verticesData' successor 
+        modifyL verticesData successor 
           $ lengthTo .~ vertexData ^. lengthTo + 1
-        newSuccessorData <- lift 
-                            $ modify verticesData' successor
-                            $ mPredecessor .~ Just vertex
+        modifyL verticesData successor $ mPredecessor .~ Just vertex
+        newSuccessorData <- readL verticesData successor
         -- Updates the best end node if the path found is longer.
         currentBest <- fmap fromJust $ use bestLastVertex
-        currentBestData <- lift $ read verticesData' currentBest
+        currentBestData <- readL verticesData currentBest
         bestLastVertex .=
           (Just $ if currentBestData ^. lengthTo 
                      < newSuccessorData ^. lengthTo

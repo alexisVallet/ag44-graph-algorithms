@@ -29,7 +29,8 @@ executable graph_algorithms
                        lens == 2.6.1,
                        graphviz == 2999.14.1.0,
                        vector == 0.9.1,
-                       cmdargs == 0.10
+                       cmdargs == 0.10,
+                       transformers == 0.3.0.0
 
 Test-Suite test-ag44-graph-algorithms
     type: exitcode-stdio-1.0
@@ -43,8 +44,9 @@ Test-Suite test-ag44-graph-algorithms
                        primitive == 0.4.1,
                        array == 0.4.0.0,
                        lens == 2.6.1,
-                       graphviz == 2999.14.1.0 ,
+                       graphviz == 2999.14.1.0,
                        test-framework == 0.6.1,
+                       transformers == 0.3.0.0,
                        test-framework-quickcheck2 == 0.2.12.3,
                        vector == 0.9.1,
                        QuickCheck == 2.5.1.1
