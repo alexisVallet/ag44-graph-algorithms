@@ -16,6 +16,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 executable graph_algorithms
+  ld-options: -static -pthread
   main-is: Main.hs
   extensions: TemplateHaskell, FlexibleContexts, RankNTypes, DeriveDataTypeable
   -- other-modules:       
