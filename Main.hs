@@ -18,6 +18,7 @@ import GraphIO
 import StronglyConnectedComponents as SCC
 import Condensation as Condensation
 import LongestPath as LongestPath
+import ShortestPath as ShortestPath
 
 import System.Console.CmdArgs
 import Control.Monad

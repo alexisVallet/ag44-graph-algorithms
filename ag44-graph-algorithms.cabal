@@ -31,7 +31,8 @@ executable graph_algorithms
                        graphviz == 2999.14.1.0,
                        vector == 0.9.1,
                        cmdargs == 0.10,
-                       transformers == 0.3.0.0
+                       transformers == 0.3.0.0,
+                       PSQueue == 1.1
 
 Test-Suite test-ag44-graph-algorithms
     type: exitcode-stdio-1.0
